@@ -1,5 +1,5 @@
 import Gbx
-import random
+import json
 import sqlite3
 
 class Panda:
@@ -7,6 +7,13 @@ class Panda:
 	def __init__(self):
 		self.players = {}
 		self.tracks = {}
+	
+		configfile = open('./config.json', 'r')
+		contents = configfile.read()
+		configfile.close()
+
+		self.config = json.loads(contents)
+
 		self.init_db()
 		self.init_tm()
 		self.sync()
@@ -30,7 +37,7 @@ class Panda:
 	def init_tm(self):
 		self.tm = Gbx.Client('localhost:5000')
 		self.tm.init()
-		self.tm.Authenticate('SuperAdmin', 'gasfull01')
+		self.tm.Authenticate('SuperAdmin', self.config['password'])
 		self.tm.EnableCallbacks(True)
 
 	def sync(self):
