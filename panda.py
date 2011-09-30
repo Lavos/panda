@@ -14,6 +14,8 @@ class Panda:
 
 		self.config = json.loads(contents)
 
+		print self.config
+
 		self.init_db()
 		self.init_tm()
 		self.sync()
@@ -150,8 +152,8 @@ class Track:
 		self.uid = track["UId"]
 		self.file = track["FileName"]
 
-		trackrow = (None, track['UId'], track['Name'], track['FileName'])
-		server.c.execute('INSERT OR IGNORE INTO tracks VALUES(?,?,?,?)', trackrow)
+		trackrow = (track['UId'], track['Name'], track['FileName'])
+		server.c.execute('INSERT OR IGNORE INTO tracks VALUES(null,?,?,?)', trackrow)
 		server.db.commit()
 		
 		server.tracks[self.uid] = self
@@ -164,8 +166,8 @@ class Player:
 		self.id = player["PlayerId"]
 		self.voted = False
 
-		userrow = (None, player['Login'], player['NickName'])
-		server.c.execute('INSERT OR IGNORE INTO users VALUES(?,?,?);', userrow)
+		userrow = (player['Login'], player['NickName'])
+		server.c.execute('INSERT OR IGNORE INTO users VALUES(null,?,?);', userrow)
 		server.db.commit()
 
 		server.players[self.login] = self

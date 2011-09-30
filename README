@@ -3,11 +3,13 @@ Panda: Python Gbx XML-RPC protocol TrackMania 2 server plugin interface
 forked from panda on googlecode:
 http://code.google.com/p/tm-panda/
 
+written by:
+Ole Jørgen Tetlie
+
 Modified to add voting functionality using sqlite
 
 requires:
 	python2
 	ManiaPlanetServer (new server version for TrackMania 2: Canyon)
 	sqlite3
-
 
