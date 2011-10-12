@@ -1,6 +1,7 @@
 import Gbx
 import json
 import sqlite3
+from templite import Templite
 
 class Panda:
 	"""Main class for the panda controller for trackmania forever."""
@@ -29,8 +30,9 @@ class Panda:
 		self.tm.set_default_method(self.cb_default)
 		self.tm.add_method("TrackMania.PlayerConnect", self.cb_player_connect)
 		self.tm.add_method("TrackMania.PlayerDisconnect", self.cb_player_disconnect)
-		self.tm.add_method("TrackMania.BeginChallenge", self.cb_begin_challenge)
+		self.tm.add_method("TrackMania.BeginMap", self.cb_begin_track)
 		self.tm.add_method("TrackMania.PlayerManialinkPageAnswer", self.cb_manialink_answer)
+		self.tm.add_method("TrackMania.PlayerFinish", self.cb_finish)
 
 	def init_db(self):
 		self.db = sqlite3.connect('./panda.db')
@@ -47,10 +49,7 @@ class Panda:
 		for player in players:
 			Player(player, self)
 
-		for login, player in self.players.iteritems():
-			print login, player
-
-		tracks = self.tm.GetChallengeList(5000, 0)
+		tracks = self.tm.GetMapList(5000, 0)
 		for track in tracks:
 			Track(track, self)
 
@@ -61,7 +60,6 @@ class Panda:
 		self.tm.ChatSendServerMessage("Connection: %s" % player["NickName"])
 		Player(player, self)
 
-		print player
 		print 'login: %s' % login
 
 		self.display_votebox_tologin(login)
@@ -71,24 +69,24 @@ class Panda:
 		del self.players[login]
 
 	def cb_default(self, *args):
-		print args
+		# print args
+		pass
 
-	def cb_begin_challenge(self, challenge, warmup, match_continuation):
-		print 'A CHALLENGE?!'
-		print self.players
-
-		self.current_track = challenge
+	def cb_begin_track(self, track, warmup, match_continuation):
+		self.current_track = track
 		for login, player in self.players.iteritems():
 			player.voted = False
 
 		self.display_votebox_toall()
 
+	def cb_finish(self, uid, login, result):
+		if result:
+			self.tm.ChatSendServerMessage("%s %s %s" % (uid, login, result))
+
 	def getvotes(self):
 		chalvalue = (self.current_track['UId'],)
 		votes = self.c.execute('SELECT vote FROM tracks AS t, votes AS v WHERE t.UId=? AND v.track = t.id;', chalvalue)
 
-		print votes
-	
 		upvotes = 0
 		downvotes = 0
 		for vote in votes:
@@ -146,6 +144,13 @@ class Panda:
 		self.db.commit()
 		self.display_votebox_toall()
 
+		if vote:
+			verb = '$0f0liked'
+		else:
+			verb = '$f00hated'
+
+		self.tm.ChatSendServerMessage("%s %s $fff$o%s$z$fff, $iwhat about you?" % (self.players[login].nick, verb, self.current_track['Name']))
+
 class Track:
 	def __init__(self, track, server):
 		self.name = track["Name"]
@@ -173,45 +178,24 @@ class Player:
 		server.players[self.login] = self
 
 def build_votebox(actions, upvotes, downvotes):
-	if actions:
-		xml = """<?xml version="1.0" encoding="utf-8"?>
-			<timeout>0</timeout>
-			<type>default</type>
-			<manialink version="1">
-				<frame posn="143 78 0">
-					<quad posn="0 0 1" sizen="17 12" bgcolor="000444"/>
-				</frame>
+	xml = """<?xml version="1.0" encoding="utf-8"?>
+<manialink version="1">
+	<quad ${if actions:}$ action="votebox_1" ${:endif}$ posn="158.15 80 1" sizen="5 5" halign="right" valign="top" style="UIConstructionSimple_Buttons" substyle="Up"/>
+	<label posn="153.15 78.7 1" sizen="100 7" halign="right" valign="top" textcolor="ffff" text="$0f0${upvotes}$$fff" textsize="1"/>
+	<label posn="147.60 78.2 1" sizen="100 5" halign="right" valign="top" textcolor="fff9" text="$tlikes" textsize="0.25"/>
 
-				<frame posn="144 77 2">
-					<quad posn="0 0 1" sizen="7 10" bgcolor="0a07"/>
-					<quad action="votebox_1" posn="0 -3 2" sizen="7 7" style="UIConstructionSimple_Buttons" substyle="Up"/>
-					<label posn="1 -1 4" sizen="7 7" textcolor="ffff" text="%s" textsize="1"/>
+	<quad ${if actions:}$ action="votebox_0" ${:endif}$ posn="158.15 76 1" sizen="5 5" halign="right" valign="top" style="UIConstructionSimple_Buttons" substyle="Down"/>
+	<label posn="153.15 74.7 1" sizen="100 7" halign="right" valign="top" textcolor="ffff" text="$f00${downvotes}$$fff" textsize="1"/>
+	<label posn="147.60 74.2 1" sizen="100 5" halign="right" valign="top" textcolor="fff9" text="$thates" textsize="0.25"/>
 
-					<quad posn="8 0 2" sizen="7 10" bgcolor="a007"/>
-					<quad action="votebox_0" posn="8 -3 3" sizen="7 7" style="UIConstructionSimple_Buttons" substyle="Down"/>
-					<label posn="9 -1 4" sizen="7 7" textcolor="ffff" text="%s" textsize="1"/>
-				</frame>
-			</manialink>""" % (upvotes, downvotes)
-	else:
-		xml = """<?xml version="1.0" encoding="utf-8"?>
-			<timeout>0</timeout>
-			<type>default</type>
-			<manialink version="1">
-				<frame posn="143 78 0">
-					<quad posn="0 0 1" sizen="17 12" bgcolor="000444"/>
-				</frame>
+	<label posn="157.55 -68.5 1" sizen="100 7" halign="right" valign="top" textcolor="ffff" text="$ff9All Time$n $m$ddd0:45.65" textsize="1"/>
 
-				<frame posn="144 77 2">
-					<quad posn="0 0 1" sizen="7 10" bgcolor="0a07"/>
-					<quad posn="0 -3 2" sizen="7 7" style="UIConstructionSimple_Buttons" substyle="Up"/>
-					<label posn="1 -1 4" sizen="7 7" textcolor="ffff" text="%s" textsize="1"/>
+</manialink>"""
 
-					<quad posn="8 0 2" sizen="7 10" bgcolor="a007"/>
-					<quad posn="8 -3 3" sizen="7 7" style="UIConstructionSimple_Buttons" substyle="Down"/>
-					<label posn="9 -1 4" sizen="7 7" textcolor="ffff" text="%s" textsize="1"/>
-				</frame>
-			</manialink>""" % (upvotes, downvotes)
-	return xml
+	t = Templite(xml)
+	manialink = t.render(actions=actions, upvotes=upvotes, downvotes=downvotes)
+
+	return manialink
 
 panda = Panda()
 while 1:
