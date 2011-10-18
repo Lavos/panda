@@ -86,7 +86,7 @@ class Panda:
 		if result:
 			self.tm.ChatSendServerMessage("%s %s %s" % (uid, login, result))
 
-			if player.userid not in self.current_track.results or result > self.current_track.results[player.userid]:
+			if player.userid not in self.current_track.results or result > self.current_track.results[player.userid] or True:
 				self.setrecord(player, result)
 				self.display_manialink(player)
 	
@@ -97,19 +97,18 @@ class Panda:
 		self.c.execute('INSERT OR REPLACE INTO records SELECT null, t.id, ?, ? FROM tracks AS t WHERE t.UId = ?;', recordrow)
 		self.db.commit()
 
+	def getfragments(self, milliseconds):
+		seconds, milliseconds = divmod(milliseconds, 1000)
+		minutes, seconds = divmod(seconds, 60)
+		hours, minutes = divmod(minutes, 60)
+
+		return hours, minutes, seconds, milliseconds
+
 	def getvotes(self):
 		chalvalue = (self.current_track.uid,)
-		votes = self.c.execute('SELECT vote FROM tracks AS t, votes AS v WHERE t.UId=? AND v.track = t.id;', chalvalue)
-
-		upvotes = 0
-		downvotes = 0
-		for vote in votes:
-			if (vote[0] == 1):
-				upvotes += 1
-			else:
-				downvotes += 1
-
-		return {'upvotes': upvotes, 'downvotes': downvotes}
+		self.c.execute('SELECT sum(vote), count(vote) FROM tracks AS t, votes AS v WHERE t.UId=? AND v.track = t.id;', chalvalue)
+		
+		return self.c.fetchone()
 
 	def cb_manialink_answer(self, uid, login, answer, entries):
 		print 'got answer: %s' % answer
@@ -142,13 +141,16 @@ class Panda:
 		xml = """
 			<?xml version="1.0" encoding="utf-8"?>
 			<manialink version="1">
-				<quad ${if actions:}$ action="votebox_1" ${:endif}$ posn="158.15 80 1" sizen="5 5" halign="right" valign="top" style="UIConstructionSimple_Buttons" substyle="Up"/>
-				<label posn="153.15 78.7 1" sizen="100 7" halign="right" valign="top" textcolor="ffff" text="$0f0${upvotes}$$fff" textsize="1"/>
-				<label posn="147.60 78.2 1" sizen="100 5" halign="right" valign="top" textcolor="fff9" text="$tlikes" textsize="0.25"/>
+				<frame>
+					<quad posn="158.15 80 1" sizen="4 4" halign="right" valign="top" style="Icons64x64_1" substyle="StateSuggested"/>
+					<label posn="153.15 78.7 1" sizen="100 7" halign="right" valign="top" textcolor="ffff" text="${opinion}$" textsize="1"/>
+				</frame>
 
-				<quad ${if actions:}$ action="votebox_0" ${:endif}$ posn="158.15 76 1" sizen="5 5" halign="right" valign="top" style="UIConstructionSimple_Buttons" substyle="Down"/>
-				<label posn="153.15 74.7 1" sizen="100 7" halign="right" valign="top" textcolor="ffff" text="$f00${downvotes}$$fff" textsize="1"/>
-				<label posn="147.60 74.2 1" sizen="100 5" halign="right" valign="top" textcolor="fff9" text="$thates" textsize="0.25"/>
+				<frame>
+					<quad ${if actions:}$ action="votebox_1" ${:endif}$ posn="140.15 76 1" sizen="5 5" halign="right" valign="top" style="UIConstructionSimple_Buttons" substyle="Up"/>
+					<quad ${if actions:}$ action="votebox_0" ${:endif}$ posn="158.15 76 1" sizen="5 5" halign="right" valign="top" style="UIConstructionSimple_Buttons" substyle="Down"/>
+					<label posn="153.15 74.7 1" sizen="100 7" halign="right" valign="top" textcolor="ffff" text="${upvotes}$ $f00${downvotes}$$fff" textsize="1"/>
+				</frame>
 
 				${if results:}$
 				<label posn="157.55 -68.5 1" sizen="100 7" halign="right" valign="top" textcolor="ffff" text="$ff9All Time$n $m$ddd${results}$" textsize="1"/>
@@ -158,7 +160,23 @@ class Panda:
 
 		print player
 
-		votes = self.getvotes()
+		upvotes, totalvotes = self.getvotes()
+		ratio = (100*upvotes) /totalvotes
+		print "%d/%d = %d" % (upvotes, totalvotes, ratio)
+
+		if ratio >= 80:
+			opinion = '$0f0adored'
+		elif ratio >= 65:
+			opinion = '$6F3enjoyed'
+		elif ratio >= 50:
+			opinion = '$CF9positive'
+		elif ratio >= 35:
+			opinion = '$FF0mixed'
+		elif ratio >= 20:
+			opinion = '$F60negative'
+		else:
+			opinion = '$f00hated'
+
 		if player.voted:
 			actions = False
 		else:
@@ -167,21 +185,15 @@ class Panda:
 		if player.userid in self.current_track.results:
 			stored = self.current_track.results[player.userid]
 
-			hours = stored / (1000*60*60)
-			minutes = (stored % (1000*60*60)) / (1000*60)
-			seconds = ((stored % (1000*60*60)) % (1000*60)) / 1000
-		
-			print hours
-			print minutes	
-			print seconds
+			hours, minutes, seconds, milliseconds = self.getfragments(stored)
 
-			results = "%2d:%02d:%.2f" % (hours, minutes, seconds)
+			results = "%2d:%02d:%2d.%d" % (hours, minutes, seconds, milliseconds)
 			print results
 		else:
 			results = None
 		
 		t = Templite(xml)
-		manialink = t.render(actions=actions, upvotes=votes['upvotes'], downvotes=votes['downvotes'], results=results)
+		manialink = t.render(actions=True, opinion=opinion, upvotes=upvotes, downvotes=(totalvotes-upvotes), results=results)
 
 		print player.login
 
